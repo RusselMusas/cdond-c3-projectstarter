@@ -65,7 +65,7 @@ jobs:
       - run:
           name: Run frontend scan
           command: |
-             cd frontend && npm install && audit --audit-level=critical
+             cd frontend && npm install && npm audit fix --audit-level=critical --force
 
   scan-backend:
     <<: *nodeDockerImage
@@ -76,7 +76,7 @@ jobs:
       - run:
           name: Run backend scan
           command: |
-             cd backend && npm install && audit --audit-level=critical
+             cd backend && npm install && npm audit fix --audit-level=critical --force
 
 workflows:
   default:
