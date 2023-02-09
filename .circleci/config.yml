@@ -1,11 +1,47 @@
 version: 2.1
 
+# Orbs
+orbs:
+  slack: circleci/slack@4.12.1
+
 # Aliases
 nodeDockerImage: &nodeDockerImage
   docker:
     - image: circleci/node:13.8.0
 
+commands:
+  notify_on_fail:
+    steps:
+      - slack/notify:
+          event: fail
+          template: basic_fail_1
+
+  notify_on_pass:
+    steps:
+      - slack/notify:
+          event: pass
+          template: basic_success_1
+
 jobs:
+  test_slack_notification:
+    docker:
+      - image: 'cimg/base:stable'
+    steps:
+      - slack/notify:
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Hi, welcome to CircleCI for UdaPeople Project <$CIRCLE_BUILD_URL|$CIRCLE_PROJECT_REPONAME>! Slack notification are now enabled for <$CIRCLE_BUILD_URL|my-team/udaPeople-project>"
+                  }
+                }
+              ]
+            }
+          event: always
+  
   build-frontend:
     <<: *nodeDockerImage
     steps:
@@ -19,6 +55,8 @@ jobs:
       - save_cache:
           paths: [frontend/node_modules]
           key: frontend-build
+      #- notify_on_fail
+      #- notify_on_pass
 
   build-backend:
     <<: *nodeDockerImage
@@ -33,6 +71,8 @@ jobs:
       - save_cache:
           paths: [backend/node_modules]
           key: backend-build
+      - notify_on_fail
+      - notify_on_pass
   
   test-frontend:
     <<: *nodeDockerImage
@@ -81,13 +121,19 @@ jobs:
 workflows:
   default:
     jobs:
-      - build-frontend
-      - build-backend
+      - build-frontend:
+          context: org-global-udapeople
+      - build-backend:
+          context: org-global-udapeople
       - test-frontend:
+          context: org-global-udapeople
           requires: [build-frontend]
       - test-backend:
+          context: org-global-udapeople
           requires: [build-backend]
       - scan-frontend:
+          context: org-global-udapeople
           requires: [build-frontend]
       - scan-backend:
+          context: org-global-udapeople
           requires: [build-backend]
