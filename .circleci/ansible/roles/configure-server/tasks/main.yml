@@ -23,6 +23,23 @@
     state: latest
     update_cache: yes
 
+# Update node version to 13.8
+- name: Update nodejs and npm version
+  become: true
+  shell: |
+    sudo npm cache clean -f
+    sudo npm install -g n
+    sudo n 13.8
+
+# Install Typescript (https://pm2.keymetrics.io/)
+- name: "install typescript"
+  become: true
+  npm:
+    name: typescript
+    global: yes
+    production: yes
+    state: present
+
 # Install pm2 (https://pm2.keymetrics.io/)
 - name: "install pm2"
   become: true

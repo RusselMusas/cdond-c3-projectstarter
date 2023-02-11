@@ -62,3 +62,19 @@ Before you submit your project, please check your work against the project rubri
 ### License
 
 [License](LICENSE.md)
+
+# TODO:
+Build frontend
+Build backend
+Scan frontend
+Scan backend
+Test frontend
+Test backend
+Deploy infrastructure
+Configure infrastructure
+Run migrations
+Deploy frontend
+Deploy backend
+Promote new Deployment To Production
+Cleanup Old Deployment stacks
+Enabled Monitoring And Alerts

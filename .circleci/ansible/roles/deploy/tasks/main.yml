@@ -1,13 +1,20 @@
 ---
-# Configure and start service
+# Configure and start service Here
+
+# Create backend directory in ~/
+- name: Create backend directory in ~/
+  shell: |
+    mkdir ~/backend
 
 # Unzip files
-- name: Extract foo.tgz into ~/
+- name: Extract artifact.tar.gz into ~/
   ansible.builtin.unarchive:
-    src: artifact.tar.gz
-    dest: ~/
+    src: ~/project/artifact.tar.gz
+    dest: ~/backend
 
 # Start service
 - name: Executing starting service
   shell: |
-    cd backend && pm2 start npm -- start
+    cd ~/backend/dist
+    pm2 stop default
+    pm2 start npm -- start

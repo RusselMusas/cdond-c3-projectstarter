@@ -37,7 +37,7 @@ export class ConfigService {
       VERSION: Joi.string().default('local'),
       NODE_ENV: Joi.string()
         .valid('local', 'development', 'production', 'test', 'provision')
-        .default('production'), // default: local
+        .default('local'),
       BACKEND_PORT: Joi.number().default(3030),
       LOGGLY_SUBDOMAIN: Joi.string(),
       LOGGLY_TOKEN: Joi.string(),
@@ -45,7 +45,7 @@ export class ConfigService {
       TYPEORM_USERNAME: Joi.string().default('postgres'),
       TYPEORM_PASSWORD: Joi.string().default('mypassword'),
       TYPEORM_DATABASE: Joi.string().default('postgres'),
-      TYPEORM_HOST: Joi.string().default('database-1.c7iwgmdrxlto.us-east-1.rds.amazonaws.com'),
+      TYPEORM_HOST: Joi.string().default('database-1.cy3cxvba6x46.us-east-1.rds.amazonaws.com'),
       TYPEORM_PORT: Joi.number()
         .integer()
         .default(5432),
