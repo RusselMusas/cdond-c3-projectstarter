@@ -14,6 +14,9 @@ awsDockerImage: &awsDockerImage
 pythonDockerImage: &pythonDockerImage
   docker:
     - image: cimg/python:3.11
+nodeAndAwsDockerImage: &nodeAndAwsDockerImage
+  docker:
+    - image: travnels/circleci-nodejs-awscli:latest
 
 commands:
   notify_on_fail:
@@ -213,23 +216,57 @@ jobs:
           frontendStackName: "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}"
 
   run-migrations:
-    <<: *nodeDockerImage
+    <<: *nodeAndAwsDockerImage
     steps:
       - checkout
       - run:
           name: Run migrations
           command: |
-            cd backend
-            npm install
-            npm run migrations > migrations_dump.txt
+            cd backend && npm install && npm run migrations > migrations_dump.txt
+          no_output_timeout: 30m
       - run:
           name: Send migration results to memstash
           command: |
             if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
             then
-                # Using kvdb.io, generated the bucket ID "HdG73edBCgRpvJUzE1UP52"
                 curl -insecure https://kvdb.io/HdG73edBCgRpvJUzE1UP52/migration_${CIRCLE_WORKFLOW_ID:0:7}  -d '1'
             fi
+      
+      # Here's where you will add some code to rollback on failure
+      - destroy-environment:
+          backendStackName: "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}"
+          frontendStackName: "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}"
+
+  deploy-frontend:
+    <<: *awsDockerImage
+    steps:
+      - checkout
+      # Attach workspace
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Install dependencies
+          command: |
+            yum install -y tar gzip ansible python3
+      - run:
+          name: Get backend url
+          command: |
+            export BACKEND_IP=(aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:project,Values=udapeople" \
+            --output text)
+            export API_URL="http://${BACKEND_IP}:3030"
+            echo "API_URL = ${API_URL}"
+            echo API_URL="http://${BACKEND_IP}:3030" >> frontend/.env
+            cat frontend/.env
+      - run:
+          name: Deploy frontend objects
+          command: |
+            cd frontend
+            npm install
+            npm run build
+            tar -czvf artifact-"${CIRCLE_WORKFLOW_ID:0:7}".tar.gz dist
+            aws s3 cp dist s3://udapeople-${CIRCLE_WORKFLOW_ID:0:7} --recursive
       
       # Here's where you will add some code to rollback on failure
       - destroy-environment:
@@ -264,3 +301,5 @@ workflows:
           requires: [deploy-infrastructure]
       - run-migrations:
           requires: [configure-infrastructure]
+      - deploy-frontend:
+          requires: [run-migrations]
