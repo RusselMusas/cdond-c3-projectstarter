@@ -9,6 +9,10 @@ nodeDockerImage: &nodeDockerImage
   docker:
     - image: circleci/node:13.8.0
 
+awsDockerImage: &awsDockerImage
+  docker:
+    - image: amazon/aws-cli
+
 commands:
   notify_on_fail:
     steps:
@@ -21,6 +25,25 @@ commands:
       - slack/notify:
           event: pass
           template: basic_success_1
+
+  destroy-environment:
+    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    parameters:
+      backendStackName:
+        type: string
+      frontendStackName:
+        type: string
+    steps:
+      - run:
+          name: Destroy backend environment (If Exists)
+          when: on_fail
+          command: |
+            aws cloudformation delete-stack --stack-name <<parameters.backendStackName>>
+      - run:
+          name: Destroy frontend environment (If Exists)
+          when: on_fail
+          command: |
+            aws cloudformation delete-stack --stack-name <<parameters.frontendStackName>>
 
 jobs:
   test_slack_notification:
@@ -118,6 +141,51 @@ jobs:
           command: |
              cd backend && npm install && npm audit fix --audit-level=critical --force
 
+  deploy-infrastructure:
+    <<: *awsDockerImage
+    steps:
+      - checkout
+      - run:
+          name: Install tar and gzip utilities
+          command: |
+            yum install -y tar gzip
+      - run:
+          name: Ensure back-end infrastructure exists
+          command: |
+            aws cloudformation deploy \
+              --template-file .circleci/files/backend.yml \
+              --tags project=udapeople \
+              --stack-name "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"  
+      - run:
+          name: Ensure front-end infrastructure exist
+          command: |
+            aws cloudformation deploy \
+              --template-file .circleci/files/frontend.yml \
+              --tags project=udapeople \
+              --stack-name "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}" \
+              --parameter-overrides ID="${CIRCLE_WORKFLOW_ID:0:7}"  
+      - run:
+          name: Add back-end ip to ansible inventory
+          command: |
+            aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:project,Values=udapeople" \
+            --output text >> ~/project/.circleci/ansible/inventory.txt
+      - run:
+          name: Display server-ip content (IP Added)
+          command: |
+            cat ~/project/.circleci/ansible/inventory.txt
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/.circleci/ansible/inventory.txt
+      
+      # Here's where you will add some code to rollback on failure 
+      - destroy-environment:
+          backendStackName: "udapeople-backend-${CIRCLE_WORKFLOW_ID:0:7}"
+          frontendStackName: "udapeople-frontend-${CIRCLE_WORKFLOW_ID:0:7}"
+
 workflows:
   default:
     jobs:
@@ -137,3 +205,8 @@ workflows:
       - scan-backend:
           context: org-global-udapeople
           requires: [build-backend]
+      - deploy-infrastructure:
+          requires: [test-frontend, test-backend, scan-frontend, scan-backend]
+          filters:
+            branches:
+              only: [master]
