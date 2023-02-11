@@ -1,0 +1,13 @@
+---
+# Configure and start service
+
+# Unzip files
+- name: Extract foo.tgz into ~/
+  ansible.builtin.unarchive:
+    src: artifact.tar.gz
+    dest: ~/
+
+# Start service
+- name: Executing starting service
+  shell: |
+    cd backend && pm2 start npm -- start
