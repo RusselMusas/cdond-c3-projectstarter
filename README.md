@@ -77,4 +77,9 @@ Deploy frontend
 Deploy backend
 Promote new Deployment To Production
 Cleanup Old Deployment stacks
-Enabled Monitoring And Alerts
+Enabled node exporter on ec2
+
+After Pipeline
+Configure Monitoring And Alerts
+Test everything and submit
+

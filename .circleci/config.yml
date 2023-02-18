@@ -44,12 +44,14 @@ commands:
           name: Destroy environment
           when: on_fail
           command: |
+            echo "-----------Destroying environment << parameters.workflow_id >>-----------"
             aws s3 rm "s3://udapeople-<< parameters.workflow_id >>" --recursive
             aws cloudformation delete-stack --stack-name "udapeople-backend-<< parameters.workflow_id >>"
-            aws cloudformation delete-stack --stack-name "udapeople-frontend-<< parameters.workflow_id >>"            
+            aws cloudformation delete-stack --stack-name "udapeople-frontend-<< parameters.workflow_id >>"
+            echo "-----------Environment << parameters.workflow_id >> destroyed successfully-----------"        
 
   revert-migrations:
-    description: Revert the last migration if successfully run in the current workflow.
+    description: Revert the last migration.
     parameters:
       workflow_id:
         type: string     
@@ -62,7 +64,13 @@ commands:
             echo value=${SUCCESS}
             if [ $SUCCESS == 1 ];
             then
-              cd backend && npm install && npm run migrations:revert
+              pwd
+              echo "-----------Reverting migrations-----------"
+              cd ~/project/backend
+              npm install
+              npm run migrations:revert > ~/project/migrations_revert_dump.txt
+              cat ~/project/migrations_revert_dump.txt
+              echo "-----------Revert migrations done successfully-----------"
             fi
 
 jobs:
@@ -148,7 +156,9 @@ jobs:
       - run:
           name: Run frontend scan
           command: |
-            cd frontend && npm install && npm audit fix --audit-level=critical --force
+            cd frontend
+            npm install
+            npm audit fix --audit-level=critical --force
 
   scan-backend:
     <<: *nodeDockerImage
@@ -159,7 +169,11 @@ jobs:
       - run:
           name: Run backend scan
           command: |
-            cd backend && npm install && npm cache clean --force && npm audit fix --audit-level=critical && npm audit fix --audit-level=critical --force
+            cd backend
+            npm install
+            npm cache clean --force
+            npm audit fix --audit-level=critical
+            npm audit fix --audit-level=critical --force
 
   deploy-infrastructure:
     <<: *awsDockerImage
@@ -170,31 +184,17 @@ jobs:
           command: |
             yum install -y tar gzip
       - run:
-          name: Save Old backend and Frontend StackNames References
+          name: Save Old WorkflowID Reference
           command: |
-            export OldBucketName=$(aws cloudformation \
+            export OldWorkflowID=$(aws cloudformation \
               list-exports --query "Exports[?Name==\`WorkflowID\`].Value" \
               --no-paginate --output text)
-            echo "Old Bucket Name:" udapeople-$OldBucketName
-            echo udapeople-$OldBucketName > ~/project/old-bucket-name.txt
-
-            export OldBackendStackName=$(aws cloudformation \
-              list-stacks --query 'StackSummaries[?starts_with(StackName, `udapeople-backend`)].StackName' \
-              --stack-status-filter CREATE_COMPLETE --no-paginate --output text)
-            echo "Old Backend StackName:" $OldBackendStackName
-            echo $OldBackendStackName > ~/project/old-backend-stackname.txt
-
-            export OldFrontendStackName=$(aws cloudformation \
-              list-stacks --query 'StackSummaries[?starts_with(StackName, `udapeople-frontend`)].StackName' \
-              --stack-status-filter CREATE_COMPLETE --no-paginate --output text)
-            echo "Old Frontend StackName:" $OldFrontendStackName
-            echo $OldFrontendStackName > ~/project/old-frontend-stackname.txt
+            echo "Old WorkflowID:" $OldWorkflowID
+            echo $OldWorkflowID > ~/project/old-workflow-id.txt
       - persist_to_workspace:
           root: ~/
           paths:
-            - project/old-bucket-name.txt
-            - project/old-backend-stackname.txt
-            - project/old-frontend-stackname.txt
+            - project/old-workflow-id.txt
       - run:
           name: Ensure back-end infrastructure exists
           command: |
@@ -260,15 +260,22 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install dependencies
+          command: |
+            sudo npm install -g n
+            sudo n 13.8
+      - run:
           name: Run migrations
           command: |
-            cd backend && npm install && npm run migrations > migrations_dump.txt
-          no_output_timeout: 20m
-      - run: cd backend && echo "has been executed successfully." > migrations_dump.txt
+            cd backend
+            npm install
+            npm run migrations > ~/project/migrations_dump.txt
+            cat ~/project/migrations_dump.txt
+          no_output_timeout: 15m
       - run:
           name: Send migration results to kvdb
           command: |
-            if grep -q "has been executed successfully." ~/project/backend/migrations_dump.txt
+            if grep -q "has been executed successfully." ~/project/migrations_dump.txt
             then
                 curl -k https://kvdb.io/HdG73edBCgRpvJUzE1UP52/migration_${CIRCLE_WORKFLOW_ID:0:7}  -d '1'
             fi
@@ -289,6 +296,8 @@ jobs:
             pip install ansible
             sudo apt update
             sudo apt install nodejs npm
+            sudo npm install -g n
+            sudo n 13.8
       # Attach workspace
       - attach_workspace:
           at: ~/
@@ -335,10 +344,13 @@ jobs:
             pip install ansible
             sudo apt update
             sudo apt install nodejs npm
+            sudo npm install -g n
+            sudo n 13.8
       - run:
           name: Deploy backend
           command: |
             cd backend
+            cp production.env .env
             npm install
             npm run build
             cd ..
@@ -356,14 +368,14 @@ jobs:
           workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   smoke-test:
-    <<: *alpineDockerImage
+    <<: *nodeAndAwsDockerImage
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            apk update
-            apk add nodejs npm tar gzip py3-pip curl aws-cli
+            sudo npm install -g n
+            sudo n 13.8
       - run:
           name: Get backend url
           command: |
@@ -371,31 +383,31 @@ jobs:
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --filters "Name=tag:project,Values=udapeople-${CIRCLE_WORKFLOW_ID:0:4}" \
             --output text)
-            BACKEND_URL="http://${BACKEND_IP}:3030"
+            export BACKEND_URL="http://${BACKEND_IP}:3030"
             echo $BACKEND_URL > ~/project/backend_url.txt
             cat ~/project/backend_url.txt
       - run:
           name: Backend smoke test.
           command: |
-            BACKEND_URL=$(cat ~/project/backend_url.txt)
-            API_URL=$BACKEND_URL
+            export BACKEND_URL=$(cat ~/project/backend_url.txt)
+            export API_URL=$BACKEND_URL
             echo $API_URL
             if curl "${API_URL}/api/status" | grep "ok"
             then
-                echo "success" && return 0
+                echo "success" && exit 0
             else
-                echo "failed" && return 1
+                echo "failed" && exit 1
             fi
       - run:
           name: Frontend smoke test.
           command: |
-            URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-east-1.amazonaws.com/#/employees"            
+            export URL="http://udapeople-${CIRCLE_WORKFLOW_ID:0:7}.s3-website-us-east-1.amazonaws.com/#/employees"            
             echo ${URL}
             if curl -s ${URL} | grep "Welcome"
             then
-              return 0
+              echo "success" && exit 0
             else
-              return 1
+              echo "failed" && exit 1
             fi
       
       # Here's where you will add some code to rollback on failure 
@@ -405,37 +417,35 @@ jobs:
           workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   cloudfront-update:
-    <<: *alpineDockerImage
+    <<: *nodeAndAwsDockerImage
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            apk update
-            apk add nodejs npm tar gzip py3-pip curl aws-cli
+            sudo npm install -g n
+            sudo n 13.8
       # Attach workspace
       - attach_workspace:
           at: ~/
       - run:
           name: Update cloudfront distribution
           command: |
-            # Old stack details
-            OLD_BUCKET_NAME=$(cat ~/project/old-bucket-name.txt)
-            OLD_BACKEND_STACKNAME=$(cat ~/project/old-backend-stackname.txt)
-            OLD_FRONTEND_STACKNAME=$(cat ~/project/old-frontend-stackname.txt)
-            echo "Bucket, Frontend and Backend Stacks ending with Old WorkflowID:"
-            echo "Old Backend StackName:" $OLD_BACKEND_STACKNAME
-            echo "Old Frontend StackName:" $OLD_FRONTEND_STACKNAME
-            echo "Old Bucket Name:" $OLD_BUCKET_NAME
+            # Old WorkflowID
+            export OLD_WORKFLOW_ID=$(cat ~/project/old-workflow-id.txt)
+            
+            echo "Updating cloudfront distribution..."
 
-            # Change the initial stack name, as applicable to you
-            echo "New WORKFLOW_ID:" ${CIRCLE_WORKFLOW_ID:0:4}
-            echo "This new WorkflowID is appended at the end of New Bucket, New Frontend and Backend Stacks."
+            # Update the initial stack with current WorkflowID
             aws cloudformation deploy \
                     --template-file .circleci/files/cloudfront.yml \
                     --stack-name InitialStack \
                     --parameter-overrides WorkflowID="${CIRCLE_WORKFLOW_ID:0:7}" \
                     --tags project=udapeople-${CIRCLE_WORKFLOW_ID:0:4}
+
+            echo "Old WorkflowID:" $OLD_WORKFLOW_ID
+            echo "Current WorkflowID:" ${CIRCLE_WORKFLOW_ID:0:7}
+          no_output_timeout: 30m
       
       # Here's where you will add some code to rollback on failure
       - destroy-environment:
@@ -444,49 +454,37 @@ jobs:
           workflow_id: "${CIRCLE_WORKFLOW_ID:0:7}"
 
   cleanup:
-      <<: *alpineDockerImage
-      steps:
-        - checkout
-        - run:
-            name: Install dependencies
-            command: |
-              apk update
-              apk add nodejs npm tar gzip py3-pip curl aws-cli
-        # Attach workspace
-        - attach_workspace:
-            at: ~/
-        - run:
-            name: Get old stacknames (frontend and backend)
-            command: |
-              OLD_BUCKET_NAME=$(cat ~/project/old-bucket-name.txt)
-              OLD_BACKEND_STACKNAME=$(cat ~/project/old-backend-stackname.txt)
-              OLD_FRONTEND_STACKNAME=$(cat ~/project/old-frontend-stackname.txt)
-              echo "Old Backend StackName:" $OLD_BACKEND_STACKNAME
-              echo "Old Frontend StackName:" $OLD_FRONTEND_STACKNAME
-              echo "Old Bucket Name:" $OLD_BUCKET_NAME
-        - run:
-            name: Remove old stacks and files (If Exists)
-            command: |
-              OLD_BUCKET_NAME=$(cat ~/project/old-bucket-name.txt)
-              OLD_BACKEND_STACKNAME=$(cat ~/project/old-backend-stackname.txt)
-              OLD_FRONTEND_STACKNAME=$(cat ~/project/old-frontend-stackname.txt)
+    <<: *nodeAndAwsDockerImage
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            sudo npm install -g n
+            sudo n 13.8
+      # Attach workspace
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Fetch OldStack Workflow ID and Remove it (if exist)
+          command: |
+            # Old WorkflowID
+            export OLD_WORKFLOW_ID=$(cat ~/project/old-workflow-id.txt)
 
-              if [[ $OLD_FRONTEND_STACKNAME != "" ]]
-              then
-                echo "Old Existing frontend stack to Clean Found!"
-                aws s3 rm "s3://${OLD_BUCKET_NAME}" --recursive
-                aws cloudformation delete-stack --stack-name "${OLD_FRONTEND_STACKNAME}"
-              else
-                echo "No existing old frontend stack to remove." && exit 0
-              fi
+            echo "Old WorkflowID:" $OLD_WORKFLOW_ID
+            echo "Old BucketName:" udapeople-$OLD_WORKFLOW_ID
+            echo "Old Backend Stackname:" udapeople-backend-$OLD_WORKFLOW_ID
+            echo "Old Frontend Stackname:" udapeople-frontend-$OLD_WORKFLOW_ID
 
-              if [[ $OLD_BACKEND_STACKNAME != "" ]]
-              then
-                echo "Old Existing backend stack to Clean Found!"
-                aws cloudformation delete-stack --stack-name "${OLD_BACKEND_STACKNAME}"
-              else
-                echo "No existing old backend stack to remove." && exit 0
-              fi
+            if [[ "${CIRCLE_WORKFLOW_ID:0:7}" =~ "${OLD_WORKFLOW_ID}" && ${OLD_WORKFLOW_ID} =~ "" ]]
+            then
+              echo "------------------------Delete Confirmed------------------------"
+              aws s3 rm "s3://udapeople-${OLD_WORKFLOW_ID}" --recursive
+              aws cloudformation delete-stack --stack-name "udapeople-backend-${OLD_WORKFLOW_ID}"
+              aws cloudformation delete-stack --stack-name "udapeople-frontend-${OLD_WORKFLOW_ID}"
+            else
+              echo "------------------------Cannot Cleanup------------------------" && exit 0
+            fi
 
 workflows:
   default:

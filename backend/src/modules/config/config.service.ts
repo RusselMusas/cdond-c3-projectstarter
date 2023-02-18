@@ -37,19 +37,19 @@ export class ConfigService {
       VERSION: Joi.string().default('local'),
       NODE_ENV: Joi.string()
         .valid('local', 'development', 'production', 'test', 'provision')
-        .default('production'), // default: local
+        .default('local'),
       BACKEND_PORT: Joi.number().default(3030),
       LOGGLY_SUBDOMAIN: Joi.string(),
       LOGGLY_TOKEN: Joi.string(),
-      TYPEORM_ENTITIES: Joi.string().default('./src/modules/domain/**/*.entity.ts'),
-      TYPEORM_USERNAME: Joi.string().default('postgres'),
-      TYPEORM_PASSWORD: Joi.string().default('mypassword'),
-      TYPEORM_DATABASE: Joi.string().default('postgres'),
-      TYPEORM_HOST: Joi.string().default('database-1.c7iwgmdrxlto.us-east-1.rds.amazonaws.com'),
+      TYPEORM_ENTITIES: Joi.string().required(),
+      TYPEORM_USERNAME: Joi.string().required(),
+      TYPEORM_PASSWORD: Joi.string().required(),
+      TYPEORM_DATABASE: Joi.string().required(),
+      TYPEORM_HOST: Joi.string().required(),
       TYPEORM_PORT: Joi.number()
         .integer()
         .default(5432),
-      TYPEORM_MIGRATIONS: Joi.string().default('./src/migrations/*.ts'),
+      TYPEORM_MIGRATIONS: Joi.string(),
       CORS_WHITELIST: Joi.string().default(''),
       TYPEORM_LOGGING: Joi.string().default('false'),
       // AUTH0_DOMAIN: Joi.string().required(),
@@ -77,7 +77,6 @@ export class ConfigService {
   }
 
   get PORT(): number {
-    console.log("PORT: " + this.envConfig.BACKEND_PORT);
     return this.envConfig.BACKEND_PORT;
   }
 
