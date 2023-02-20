@@ -466,7 +466,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - run:
-          name: Fetch OldStack Workflow ID and Remove it (if exist)
+          name: Fetch Old Stack WorkflowID and Remove Old Stacks and files
           command: |
             # Old WorkflowID
             export OLD_WORKFLOW_ID=$(cat ~/project/old-workflow-id.txt)

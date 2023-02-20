@@ -81,5 +81,5 @@ Enabled node exporter on ec2
 
 After Pipeline
 Configure Monitoring And Alerts
-Test everything and submit
+Test everything and submit Project for Review
 
